@@ -101,11 +101,91 @@ public class AccountService {
         return Optional.ofNullable(accounts.get(key(username)));
     }
 
-    // --- Các phương thức còn lại sẽ cài đặt ở TODO-6 ---
+    // --- Cài đặt TODO-6: login, unlockAccount, disableAccount, isLocked ---
 
+    /**
+     * BR-LOG: Đăng nhập bám theo bảng quyết định 6 quy tắc
+     */
     public ResultCode login(String username, String password) {
-        throw new UnsupportedOperationException("TODO");
+        // 1. Kiểm tra input rỗng/null
+        if (isBlank(username) || isBlank(password)) {
+            return ResultCode.INVALID_INPUT;
+        }
+
+        // 2. Tra cứu tài khoản (không phân biệt hoa/thường)
+        Account acc = accounts.get(key(username));
+        if (acc == null) {
+            return ResultCode.INVALID_CREDENTIALS; // Bảo mật: không tiết lộ lý do
+        }
+
+        // 3. Kiểm tra trạng thái DISABLED
+        if (acc.getStatus() == AccountStatus.DISABLED) {
+            return ResultCode.ACCOUNT_DISABLED;
+        }
+
+        // 4. Kiểm tra tài khoản đang bị khóa (không tăng bộ đếm)
+        if (acc.isLocked()) {
+            return ResultCode.ACCOUNT_LOCKED;
+        }
+
+        // 5. Kiểm tra mật khẩu
+        if (!PasswordHasher.matches(acc.getSalt(), password, acc.getCurrentPasswordHash())) {
+            acc.incrementFailedAttempts();
+            // Đạt ngưỡng 5 lần sai (dùng >=) thì tự động khóa
+            if (acc.getFailedAttempts() >= MAX_FAILED_ATTEMPTS) {
+                acc.lock();
+                return ResultCode.ACCOUNT_LOCKED;
+            }
+            return ResultCode.INVALID_CREDENTIALS;
+        }
+
+        // 6. Đăng nhập thành công -> reset bộ đếm về 0
+        acc.resetFailedAttempts();
+        return ResultCode.SUCCESS;
     }
+
+    /**
+     * BR-ADM-03: Mở khóa tài khoản và reset bộ đếm số lần sai về 0
+     */
+    public ResultCode unlockAccount(String username) {
+        if (isBlank(username)) {
+            return ResultCode.USER_NOT_FOUND;
+        }
+        Optional<Account> acc = findByUsername(username);
+        if (acc.isEmpty()) {
+            return ResultCode.USER_NOT_FOUND;
+        }
+        acc.get().unlock(); // locked = false, failedAttempts = 0
+        return ResultCode.SUCCESS;
+    }
+
+    /**
+     * Vô hiệu hóa tài khoản (chuyển sang DISABLED)
+     */
+    public ResultCode disableAccount(String username) {
+        if (isBlank(username)) {
+            return ResultCode.USER_NOT_FOUND;
+        }
+        Optional<Account> acc = findByUsername(username);
+        if (acc.isEmpty()) {
+            return ResultCode.USER_NOT_FOUND;
+        }
+        acc.get().setStatus(AccountStatus.DISABLED);
+        return ResultCode.SUCCESS;
+    }
+
+    /**
+     * Kiểm tra tài khoản có đang bị khóa hay không (an toàn với username null/không tồn tại)
+     */
+    public boolean isLocked(String username) {
+        if (isBlank(username)) {
+            return false;
+        }
+        Account acc = accounts.get(key(username));
+        return acc != null && acc.isLocked();
+    }
+
+    // --- Các hàm Bonus (giữ nguyên stub TODO theo yêu cầu đề bài) ---
 
     public ResultCode changePassword(String username, String oldPassword,
                                      String newPassword, String confirmPassword) {
@@ -120,18 +200,6 @@ public class AccountService {
         throw new UnsupportedOperationException("TODO");
     }
 
-    public ResultCode disableAccount(String username) {
-        throw new UnsupportedOperationException("TODO");
-    }
-
-    public ResultCode unlockAccount(String username) {
-        throw new UnsupportedOperationException("TODO");
-    }
-
-    public boolean isLocked(String username) {
-        throw new UnsupportedOperationException("TODO");
-    }
-
     // --- Helper methods ---
 
     private static boolean isBlank(String s) {
@@ -141,4 +209,5 @@ public class AccountService {
     private static String key(String s) {
         return s == null ? "" : s.toLowerCase(Locale.ROOT);
     }
+
 }
