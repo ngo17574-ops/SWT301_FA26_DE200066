@@ -1,4 +1,4 @@
-package lab2.account;
+package lab2;
 public enum AccountStatus {
     ACTIVE,
     DISABLED

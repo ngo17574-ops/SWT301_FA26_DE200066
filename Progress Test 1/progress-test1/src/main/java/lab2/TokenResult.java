@@ -1,4 +1,4 @@
-package lab2.account;
+package lab2;
 
 public record TokenResult(ResultCode code, String token) {
 }

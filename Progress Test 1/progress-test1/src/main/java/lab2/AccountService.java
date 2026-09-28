@@ -1,4 +1,4 @@
-package lab2.account;
+package lab2;
 
 import java.time.LocalDate;
 import java.util.Optional;
